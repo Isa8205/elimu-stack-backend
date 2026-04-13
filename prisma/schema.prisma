@@ -1,0 +1,49 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Course {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  semesters Semester[]
+  createdAt DateTime @default(now())
+}
+
+model Semester {
+  id              String   @id @default(uuid())
+  name            String
+  academicYear    Int
+  units           Unit[]
+  course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId        String
+  createdAt       DateTime @default(now())
+
+  @@unique([name])
+}
+
+model Unit {
+  id         String   @id @default(uuid())
+  name       String
+  code       String?
+  semester   Semester @relation(fields: [semesterId], references: [id], onDelete: Cascade)
+  semesterId String
+  papers     Paper[]
+  createdAt  DateTime @default(now())
+
+  @@unique([semesterId, name])
+}
+
+model Paper {
+  id         String   @id @default(uuid())
+  title      String
+  fileUrl    String
+  examYear   Int
+  unit       Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  unitId     String
+  uploadedAt DateTime @default(now())
+}
