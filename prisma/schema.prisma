@@ -22,8 +22,6 @@ model Semester {
   course          Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
   courseId        String
   createdAt       DateTime @default(now())
-
-  @@unique([name])
 }
 
 model Unit {

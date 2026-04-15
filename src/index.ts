@@ -14,54 +14,92 @@ app.use(express.json());
 
 app.post("/add-course", async (req, res, next) => {
   try {
-    const data: { name: string } = req.body;
+    const data: { name: string, academicYears: number } = req.body;
 
-    if (!data.name) {
-      res.status(400).json({ message: "Missing name field" });
+    if (!data.name || !data.academicYears) {
+      res.status(400).json({ message: "Missing required fields" });
       return;
     }
 
-    await prisma.course.create({
+    const course = await prisma.course.create({
       data: {
         name: data.name
       },
     })
 
+    const yearsArray = Array.from({ length: data.academicYears }, (_, i) => i+1);
+    yearsArray.forEach(async (currYear) => {
+      await prisma.semester.create({
+        data: {
+          name: `${currYear}.1`,
+          academicYear: currYear,
+          course: {
+            connect: { id: course.id }
+          }
+        }
+      });
+
+      await prisma.semester.create({
+        data: {
+          name: `${currYear}.2`,
+          academicYear: currYear,
+          course: {
+            connect: { id: course.id }
+          }
+        }
+      });
+    });
+
     res.status(200).json({ message: "Course created successfully" });
   } catch (err) {
     next(err);
   }
-})
+});
 
-app.post("/add-semester", async (req, res) => {
-  const data: { courseId: string, name: string, academicYear: number } = req.body;
+app.get("/get-semesters", async (req, res) => {
+  const { courseId } = req.query; 
 
-  if (!data.courseId || !data.name || !data.academicYear) {
-    return res.status(400).json({ error: "Missing required fields" })
-  }
-
-  const course = await prisma.course.findFirst({
+  const results = await prisma.semester.findMany({
     where: {
-      id: data.courseId
-    }
-  });
-
-  if (!course) {
-    return res.status(404).json({ error: "The specified course does not exist." });
-  }
-
-  await prisma.semester.create({
-    data: {
-      name: data.name,
-      academicYear: data.academicYear,
       course: {
-        connect: { id: data.courseId }
+        id: String(courseId),
       }
     }
   });
 
-  res.status(201).json({ message: "Semester created successfully" });
+  res.status(200).json(results);
 })
+
+app.get("/get-courses", async (req, res) => {
+  const results = await prisma.course.findMany();
+
+  res.status(200).json({ courses: results });
+});
+
+app.post("/add-unit", async (req, res, next) => {
+  try {
+    const data: { name: string, code: string, semesterId: string } = req.body;
+
+    if (!data.name || !data.code || !data.semesterId) {
+      res.status(400).json({ error: "Missing required fields" });
+    }
+
+    await prisma.unit.create({
+      data: {
+        name: data.name,
+        code: data.code,
+        semester: {
+          connect: { id: data.semesterId }
+        }
+      }
+    });
+
+    res.status(201).json({ message: "Unit created successfully" });
+  } catch (err) {
+    console.error(err);
+    next(err);
+  }
+});
 
 app.get("/papers", async (req, res) => {
   const result = {
