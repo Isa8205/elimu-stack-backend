@@ -50,7 +50,7 @@ app.post("/add-course", async (req, res, next) => {
       });
     });
 
-    res.status(200).json({ message: "Course created successfully" });
+    res.status(201).json({ message: "Course created successfully" });
   } catch (err) {
     next(err);
   }
