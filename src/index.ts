@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { logger } from './middleware/logger';
 import prisma from './lib/prisma';
@@ -114,8 +114,12 @@ app.get("/papers", async (req, res) => {
   res.send(result);
 })
 
+app.use((req: Request, res: Response) => {
+  res.status(404).json({ error: "Route not found" });
+});
+
 // Central error handling
-app.use((err: Error, req: Request, res: Response) => {
+app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
       const field = err.meta?.target;
