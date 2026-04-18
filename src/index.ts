@@ -12,6 +12,10 @@ app.use(logger);
 app.use(cors());
 app.use(express.json());
 
+app.head("/health", (_req, res) => {
+  res.sendStatus(200);
+});
+
 app.post("/add-course", async (req, res, next) => {
   try {
     const data: { name: string, academicYears: number } = req.body;
@@ -71,7 +75,20 @@ app.get("/get-semesters", async (req, res) => {
 })
 
 app.get("/get-courses", async (req, res) => {
-  const results = await prisma.course.findMany();
+  const courses = await prisma.course.findMany({
+    include: {
+      semesters: {
+        orderBy: { "academicYear": "asc" }
+      }
+    }
+  });
+
+  const results = courses.map((course) => {
+    return {
+      ...course,
+      academicYears: Math.max(...course.semesters.map(s => s.academicYear))
+    }
+  });
 
   res.status(200).json({ courses: results });
 });
@@ -101,7 +118,29 @@ app.post("/add-unit", async (req, res, next) => {
   }
 });
 
-app.get("/papers", async (req, res) => {
+app.get("/get-units", async (req, res, next) => {
+ try {
+   const { semesterId } = req.query;
+
+   if (semesterId) {
+     const results = await prisma.unit.findMany({
+       where: {
+         semester: {
+           id: String(semesterId)
+         }
+       }
+     })
+
+     return res.status(200).json({ units: results });
+   }
+
+   res.status(400).json({ error: "Missing semesterId in query" });
+ } catch (err) {
+   next(err);
+ }
+});
+
+app.get("/papers", async (_req, res) => {
   const result = {
     status: "success",
     data: [
