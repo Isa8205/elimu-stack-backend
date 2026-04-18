@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Custom folders
+uploads/
+src/generated/
+
 # Environment variables
 .env
 .env.*

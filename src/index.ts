@@ -2,11 +2,28 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { logger } from './middleware/logger';
 import prisma from './lib/prisma';
-import { Prisma } from './generated/client';
+import { Paper_Category, Prisma } from './generated/client';
+import multer from "multer";
+import fs from "fs";
+import path from 'path';
 
 require('dotenv').config();
 
 const app = express();
+
+// File uploads for dev
+let uploadDir: string;
+if (process.env.NODE_ENV !== "production") {
+  uploadDir = path.join(__dirname, '../uploads');
+  if (!fs.existsSync(uploadDir)) {
+    fs.mkdirSync(uploadDir, { recursive: true });
+  }
+}
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+})
 
 app.use(logger);
 app.use(cors());
@@ -61,17 +78,18 @@ app.post("/add-course", async (req, res, next) => {
 });
 
 app.get("/get-semesters", async (req, res) => {
-  const { courseId } = req.query; 
+  const { courseId, year } = req.query; 
 
   const results = await prisma.semester.findMany({
     where: {
       course: {
         id: String(courseId),
-      }
+      },
+      ...(year && { academicYear: Number(year) })
     }
   });
 
-  res.status(200).json(results);
+  res.status(200).json({ semesters: results });
 })
 
 app.get("/get-courses", async (req, res) => {
@@ -138,6 +156,41 @@ app.get("/get-units", async (req, res, next) => {
  } catch (err) {
    next(err);
  }
+});
+
+app.post("/add-paper", upload.single("file"), async (req, res, next) => {
+  const { title, unitId } = req.body;
+  const file = req.file;
+
+  if (!title || !unitId || !file) {
+    return res.status(400).json({ error: "Missing required fields" });
+  }
+
+  if (file.mimetype !== "application/pdf") {
+    return res.status(422).json({ error: "Wrong file type. Only pdf accepted" });
+  }
+
+  // TODO: Handle how multer throws errors regarding file size.
+  const filePath = path.join(uploadDir, `papers/${Date.now()}-${file.originalname}`);
+
+  try {
+    await fs.promises.writeFile(filePath, file.buffer);
+
+    await prisma.paper.create({
+      data: {
+        title: title,
+        fileUrl: filePath,
+        category: Paper_Category.FINAL_EXAM,
+        examYear: 2025,
+        unit: { connect: { id: unitId } }
+      }
+    })
+
+    res.status(201).json({ error: "Paper saved successfully" });
+  } catch(err) {
+    await fs.promises.unlink(filePath);
+    next(err);
+  }
 });
 
 app.get("/papers", async (_req, res) => {

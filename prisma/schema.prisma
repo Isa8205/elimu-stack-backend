@@ -39,9 +39,16 @@ model Unit {
 model Paper {
   id         String   @id @default(uuid())
   title      String
+  category   Paper_Category
   fileUrl    String
   examYear   Int
   unit       Unit     @relation(fields: [unitId], references: [id], onDelete: Cascade)
   unitId     String
   uploadedAt DateTime @default(now())
+}
+
+enum Paper_Category {
+  CAT
+  FINAL_EXAM
+  ASSIGNMENT
 }
