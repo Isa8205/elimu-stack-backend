@@ -29,7 +29,7 @@ app.use(logger);
 app.use(cors());
 app.use(express.json());
 
-app.head("/health", (_req, res) => {
+app.get("/health", (_req, res) => {
   res.sendStatus(200);
 });
 
