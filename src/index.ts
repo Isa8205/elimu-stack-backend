@@ -161,7 +161,7 @@ app.get("/get-units", async (req, res, next) => {
 app.post("/add-paper", upload.single("file"), async (req, res, next) => {
   const { title, unitId } = req.body;
   const file = req.file;
-
+  
   if (!title || !unitId || !file) {
     return res.status(400).json({ error: "Missing required fields" });
   }
@@ -170,8 +170,13 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
     return res.status(422).json({ error: "Wrong file type. Only pdf accepted" });
   }
 
+  const papersDir = path.join(uploadDir, "papers");
+  if (!fs.existsSync(papersDir)) {
+    await fs.promises.mkdir(papersDir, { recursive: true });
+  }
+
   // TODO: Handle how multer throws errors regarding file size.
-  const filePath = path.join(uploadDir, `papers/${Date.now()}-${file.originalname}`);
+  const filePath = path.join(papersDir, `${Date.now()}-${file.originalname}`);
 
   try {
     await fs.promises.writeFile(filePath, file.buffer);
@@ -186,8 +191,10 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
       }
     })
 
-    res.status(201).json({ error: "Paper saved successfully" });
+    res.status(201).json({ message: "Paper saved successfully" });
   } catch(err) {
+    console.error(err);
+
     await fs.promises.unlink(filePath);
     next(err);
   }
@@ -212,6 +219,8 @@ app.use((req: Request, res: Response) => {
 
 // Central error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
+  console.error(err);
+
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
       const field = err.meta?.target;
