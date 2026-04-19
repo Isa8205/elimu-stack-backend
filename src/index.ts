@@ -2,7 +2,7 @@ import express, { NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { logger } from './middleware/logger';
 import prisma from './lib/prisma';
-import { Paper_Category, Prisma } from './generated/client';
+import { Paper_Category, Prisma } from '../prisma/generated/client';
 import multer from "multer";
 import fs from "fs";
 import path from 'path';
@@ -220,6 +220,13 @@ app.use((req: Request, res: Response) => {
 // Central error handling
 app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   console.error(err);
+  if (err instanceof multer.MulterError) {
+    if (err.code === 'LIMIT_FILE_SIZE') {
+      return res.status(400).json({
+        error: 'File too large. Max size is 5MB.',
+      });
+    }
+  }
 
   if (err instanceof Prisma.PrismaClientKnownRequestError) {
     if (err.code === "P2002") {
