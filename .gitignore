@@ -3,7 +3,7 @@ node_modules/
 
 # Custom folders
 uploads/
-src/generated/
+prisma/generated/
 
 # Environment variables
 .env
