@@ -6,8 +6,8 @@ import { Paper_Category, Prisma } from '../prisma/generated/client';
 import multer from "multer";
 import fs from "fs";
 import path from 'path';
-
-require('dotenv').config();
+import mime from "mime-types"
+import { getFileUrl } from './utils/url';
 
 const app = express();
 
@@ -28,6 +28,43 @@ const upload = multer({
 app.use(logger);
 app.use(cors());
 app.use(express.json());
+
+app.get("/media", async (req, res) => {
+  const { id } = req.query;
+
+  if (!id) {
+    return res.status(400).json({ error: "Id not provided" });
+  }
+
+  const paper = await prisma.paper.findUnique({
+    where: {
+      id: String(id)
+    }
+  });
+
+  if (!paper) return res.status(404).json({ error: "File not found" });
+
+  const absolutePath = path.resolve(paper.fileUrl);
+
+  const uploadsDir = path.resolve(__dirname, "../uploads/papers");
+  if (!absolutePath.startsWith(uploadsDir)) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+
+  if (!fs.existsSync(absolutePath)) {
+    return res.status(410).json({ error: "File no longer exists on disk" });
+  }
+
+  const mimeType = mime.lookup(absolutePath) || 'application/octet-stream';
+  const safeName = paper.title.replace(/[^a-z0-9]/gi, '_');
+
+  console.log(safeName);
+
+  res.setHeader('Content-Type', mimeType);
+  res.setHeader('Content-Disposition', `inline; filename="${safeName}.pdf"`);
+
+  fs.createReadStream(absolutePath).pipe(res);
+});
 
 app.get("/health", (_req, res) => {
   res.sendStatus(200);
@@ -200,17 +237,23 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
   }
 });
 
-app.get("/papers", async (_req, res) => {
-  const result = {
-    status: "success",
-    data: [
-      { id: 1,
-        name: "English made farmilliar"
-      }
-    ]
-  }
+app.get("/get-papers", async (req, res) => {
+  const { page, items } = req.query;
 
-  res.send(result);
+  const currentPage = page || 1;
+  const itemsPerPage = items || 15;
+
+  const papers = await prisma.paper.findMany();
+
+  const result = papers.map((paper) => {
+    if (paper.fileUrl) {
+      return { ...paper, fileUrl: `${getFileUrl(req, paper.id)}` };
+    }
+
+    return paper;
+  });
+
+  res.status(200).json({ papers: result, totalPages: 5 });
 })
 
 app.use((req: Request, res: Response) => {
