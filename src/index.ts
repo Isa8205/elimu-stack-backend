@@ -114,6 +114,39 @@ app.post("/add-course", async (req, res, next) => {
   }
 });
 
+app.get("/get-nav-sems", async (req, res) => {
+  const { course, year } = req.query;
+
+  if (!course || !year) {
+    return res.status(400).json({ error: "Missing course and year in the request" });
+  }
+
+  const queryData = await prisma.semester.findMany({
+    select: {
+      id: true,
+      name: true,
+      units: {
+        select: {
+          id: true,
+          name: true
+        }
+      }
+    },
+    where: {
+      academicYear: parseInt(String(year)),
+      course: {
+        name: String(course),
+      }
+    }
+  })
+
+  const results = queryData.map(item => {
+    return { ...item, name: `Semester ${parseInt(item.name.split(".")[1])}` };
+  })
+
+  res.status(200).json({ result: results });
+});
+
 app.get("/get-semesters", async (req, res) => {
   const { courseId, year } = req.query; 
 
@@ -237,23 +270,59 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
   }
 });
 
-app.get("/get-papers", async (req, res) => {
-  const { page, items } = req.query;
+app.get("/get-papers", async (req, res, next) => {
+  const { page, limit, course, year, semester, unit } = req.query;
 
   const currentPage = page || 1;
-  const itemsPerPage = items || 15;
+  const itemsPerPage = limit || 15;
 
-  const papers = await prisma.paper.findMany();
+  try {
+    const papers = await prisma.paper.findMany({
+      where: {
+        unit: {
+          semester: {
+            academicYear: Number(year),
+            course: {
+              name: String(course),
+            },
+          }
+        }
+      },
+      include: {
+        unit: {
+          select: {
+            name: true,
+            semester: {
+              select: {
+                name: true
+              }
+            } 
+          }
+        }
+      },
+      omit: {
+        unitId: true,
+      }
+    });
 
-  const result = papers.map((paper) => {
-    if (paper.fileUrl) {
-      return { ...paper, fileUrl: `${getFileUrl(req, paper.id)}` };
-    }
+    const result = papers.map((paper) => {
+      const semString = paper.unit.semester.name;
 
-    return paper;
-  });
+      const currentSem = parseInt(semString.split('.')[1]);
 
-  res.status(200).json({ papers: result, totalPages: 5 });
+      let finalPaper = { ...paper, unit: { ...paper.unit, semester: currentSem } };
+
+      if (paper.fileUrl) {
+        finalPaper = { ...finalPaper, fileUrl: `${getFileUrl(req, paper.id)}` };
+      }
+
+      return finalPaper;
+    });
+
+    res.status(200).json({ papers: result, totalPages: 5 });
+  } catch (err) {
+    next(err);
+  }
 })
 
 app.use((req: Request, res: Response) => {
