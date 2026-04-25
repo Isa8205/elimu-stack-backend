@@ -2,8 +2,8 @@ import { config } from "dotenv";
 
 config();
 
-export function requireEnv(key: string) {
+export function requireEnv(key: string): string {
   const value = process.env[key];
-  if (!value) throw Error(`Missing requiered environment with key ${key}`);
+  if (!value) throw new Error(`Missing required environment variable: ${key}`);
   return value;
 }

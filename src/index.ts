@@ -21,7 +21,7 @@ import { requireEnv } from "./utils/env";
 
 const app = express();
 
-// File uploads for dev
+// Initialize S3 Client
 const s3 = new S3Client({
   region: "auto",
   endpoint: requireEnv("S3_API"),
@@ -37,6 +37,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 },
 });
 
+app.set("trust proxy", 1);
 app.use(logger);
 app.use(cors());
 app.use(express.json());
@@ -57,17 +58,21 @@ app.get("/media", async (req, res, next) => {
   });
 
   if (!paper) return res.status(404).json({ error: "File not found" });
-  
   const response = await s3.send(
     new GetObjectCommand({
-      Bucket: process.env.S3_BUCKET,
+      Bucket: requireEnv("S3_BUCKET"),
       Key: paper.fileUrl,
     })
   );
 
-  res.setHeader("Content-Type", response.ContentType || "application/octet-stream");
+  const sanitizedTitle = paper.title.replace(/["\r\n]/g, "_");
+  res.setHeader("Content-Type", response.ContentType ?? "application/octet-stream");
   res.setHeader("Content-Length", response.ContentLength ?? 0)
-  res.setHeader("Content-Disposition", `inline; filename="${paper.title}.pdf"`);
+  res.setHeader("Content-Disposition", `inline; filename="${sanitizedTitle}.pdf"`);
+
+  if (response.$metadata.httpStatusCode === 404) {
+    return res.status(404).json({ error: "File not found" });
+  }
 
   const stream = Readable.fromWeb(response.Body?.transformToWebStream() as ReadableStream);
 
@@ -282,6 +287,7 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
         title: title,
         fileUrl: key,
         category: Paper_Category.FINAL_EXAM,
+        // TODO: Change this to be dynamic based on the semester's academic year
         examYear: 2025,
         unit: { connect: { id: unitId } },
       },
@@ -294,7 +300,7 @@ app.post("/add-paper", upload.single("file"), async (req, res, next) => {
     try {
       await s3.send(
         new DeleteObjectCommand({
-          Bucket: process.env.S3_BUCKET,
+          Bucket: requireEnv("S3_BUCKET"),
           Key: key,
         }),
       );
@@ -397,10 +403,9 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       return res.status(404).json({ error: "Record not found" });
     }
   }
-
   // S3 Errors
   if (err instanceof NoSuchKey) {
-    return res.status(404).json({ message: "File not found" });
+    return res.status(404).json({ error: "File not found" });
   }
 
   // Fallback
