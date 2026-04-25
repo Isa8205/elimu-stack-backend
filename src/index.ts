@@ -34,7 +34,7 @@ const s3 = new S3Client({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 5 * 1024 * 1024 },
+  limits: { fileSize: 10 * 1024 * 1024 },
 });
 
 app.set("trust proxy", 1);
@@ -51,38 +51,38 @@ app.get("/media", async (req, res, next) => {
 
   try {
 
-  const paper = await prisma.paper.findUnique({
-    where: {
-      id: String(id),
-    },
-  });
+    const paper = await prisma.paper.findUnique({
+      where: {
+        id: String(id),
+      },
+    });
 
-  if (!paper) return res.status(404).json({ error: "File not found" });
-  const response = await s3.send(
-    new GetObjectCommand({
-      Bucket: requireEnv("S3_BUCKET"),
-      Key: paper.fileUrl,
-    })
-  );
+    if (!paper) return res.status(404).json({ error: "File not found" });
+    const response = await s3.send(
+      new GetObjectCommand({
+        Bucket: requireEnv("S3_BUCKET"),
+        Key: paper.fileUrl,
+      })
+    );
 
-  const sanitizedTitle = paper.title.replace(/["\r\n]/g, "_");
-  res.setHeader("Content-Type", response.ContentType ?? "application/octet-stream");
-  res.setHeader("Content-Length", response.ContentLength ?? 0)
-  res.setHeader("Content-Disposition", `inline; filename="${sanitizedTitle}.pdf"`);
+    const sanitizedTitle = paper.title.replace(/["\r\n]/g, "_");
+    res.setHeader("Content-Type", response.ContentType ?? "application/octet-stream");
+    res.setHeader("Content-Length", response.ContentLength ?? 0)
+    res.setHeader("Content-Disposition", `inline; filename="${sanitizedTitle}.pdf"`);
 
-  if (response.$metadata.httpStatusCode === 404) {
-    return res.status(404).json({ error: "File not found" });
-  }
+    if (response.$metadata.httpStatusCode === 404) {
+      return res.status(404).json({ error: "File not found" });
+    }
 
-  const stream = Readable.fromWeb(response.Body?.transformToWebStream() as ReadableStream);
+    const stream = Readable.fromWeb(response.Body?.transformToWebStream() as ReadableStream);
 
-  req.on("close", () => stream.destroy());
-  stream.on("error", (err) => {
-    console.error("Stream error:", err);
-    if (!res.headersSent) res.status(500).json({ error: "Stream failed" });
-  });
+    req.on("close", () => stream.destroy());
+    stream.on("error", (err) => {
+      console.error("Stream error:", err);
+      if (!res.headersSent) res.status(500).json({ error: "Stream failed" });
+    });
 
-  stream.pipe(res);
+    stream.pipe(res);
   } catch (err) {
     next(err)
   }
@@ -316,8 +316,8 @@ app.get("/get-papers", async (req, res, next) => {
   const { page, limit, course, year, unit } = req.query;
 
   // TODO: Implement the pagination logic
-  const currentPage = page || 1;
-  const itemsPerPage = limit || 15;
+  //const currentPage = page || 1;
+  //const itemsPerPage = limit || 15;
 
   try {
     const papers = await prisma.paper.findMany({
